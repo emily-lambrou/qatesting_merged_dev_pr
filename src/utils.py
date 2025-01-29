@@ -3,6 +3,33 @@ import config
 from datetime import datetime, timedelta
 from logger import logger
 
+def prepare_qatesting_issue_comment(issue: dict, assignees: dict):
+    """
+    Prepare the comment from the given arguments and return it
+    """
+
+    comment = ''
+    if assignees:
+        for assignee in assignees:
+            comment += f'@{assignee["login"]} '
+    else:
+        logger.info(f'No assignees found for issue #{issue["number"]}')
+
+    comment += f'Testing will be available in 15 minutes.'
+
+    logger.info(f'Issue {issue["title"]} | {comment}')
+
+    return comment
+
+
+def check_comment_exists_for_qatesting(issue_id, comment_text_qatesting):
+    """Check if the comment already exists on the issue."""
+    comments = graphql.get_issue_comments(issue_id)
+    for comment in comments:
+        if comment_text_qatesting in comment.get('body', ''):
+            return True
+    return False
+
 
 def prepare_duedate_comment(issue: dict, assignees: dict, due_date):
     """
