@@ -1,0 +1,42 @@
+name: "Custom Project Automations"
+description: "Project Automations"
+author: "Petros Andreou"
+branding:
+  icon: 'clock'
+  color: 'green'
+runs:
+  using: "docker"
+  image: "Dockerfile"
+inputs:
+  gh_token:
+    description: "The Personal Token"
+    required: true
+  project_number:
+    description: "The Project Number"
+    required: true
+  repository_owner_type:
+    description: "The type of the repository owner (organization,user)"
+    required: true
+    default: 'user'
+  enterprise_github:
+    description: "Determines if the GitHub is the enterprise ot not (True,False)"
+    required: false
+    default: 'False'
+  comments_issue_number:
+    description: "Set the issue number of the ticket you want the comments to be placed"
+    required: false
+    default: 'False'
+  comments_issue_repo:
+    description: "Set the issue repo of the ticket you want the comments to be placed"
+    required: false
+    default: 'False'
+  dry_run:
+    description: "DryRun Mode (True,False)"
+    required: false
+    default: 'False'
+  duedate_field_name:
+    description: "The field name for the due date"
+    required: true
+    default: 'Due Date'
+
+    
