@@ -15,3 +15,4 @@ comments_issue_number = 0 if os.environ.get('INPUT_COMMENTS_ISSUE_NUMBER') == 'F
 comments_issue_repo = False if os.environ.get('INPUT_COMMENTS_ISSUE_REPO') == 'False' else os.environ.get('INPUT_COMMENTS_ISSUE_REPO')
 
 duedate_field_name = os.environ['INPUT_DUEDATE_FIELD_NAME']
+status_field_name = os.environ['INPUT_STATUS_FIELD_NAME']
