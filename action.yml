@@ -34,9 +34,5 @@ inputs:
     description: "DryRun Mode (True,False)"
     required: false
     default: 'False'
-  duedate_field_name:
-    description: "The field name for the due date"
-    required: true
-    default: 'Due Date'
 
     
