@@ -4,6 +4,54 @@ import config
 import utils
 import graphql
 
+
+def notify_change_status(issues):
+    for issue in issues:
+        if issue.get('state') == 'CLOSED':
+            continue
+
+        issue_content = issue.get('content', {})
+        if not issue_content:
+            logger.warning(f'Issue object does not contain "content": {issue}')
+            continue
+
+        issueId = issue_content.get('id')
+      
+        project_items = issue.get('projectItems', {}).get('nodes', [])
+        if not project_items:
+            logger.warning(f'No project items found for issue {issueId}')
+            continue
+
+        project_item = project_items[0]
+        if not project_item.get('fieldValueByName'):
+            logger.warning(f'Project item does not contain "fieldValueByName": {project_item}')
+            continue
+
+        current_status = project_item['fieldValueByName'].get('name')
+        if not current_status:
+            logger.warning(f'No status found in fieldValueByName for project item: {project_item}')
+            continue
+
+        if current_status == 'QA Testing':
+            comment_text_qatesting = "Testing will be available in 15 minutes."
+
+            if not utils.check_comment_exists_for_qatesting(issueId, comment_text_qatesting):
+                comment = utils.prepare_qatesting_issue_comment(
+                    issue=issue_content,
+                    assignees=issue_content.get('assignees', {}).get('nodes', []),
+                )
+
+                if not config.dry_run:
+                    comment_result = graphql.add_issue_comment(issueId, comment)
+                    if comment_result:
+                        logger.info(f'Comment added to issue #{issue_content.get("number")} ({issueId})')
+                    else:
+                        logger.error(f'Failed to add comment to issue #{issue_content.get("number")} ({issueId})')
+            else:
+                logger.info(f'Comment already exists for issue #{issue_content.get("number")} ({issueId})')
+
+
+
 def notify_due_date_changes(issues):
     for projectItem in issues:
         # Safely extract 'content' from projectItem
@@ -213,6 +261,7 @@ def main():
 
     # Process to identify change in the due date and write a comment in the issue
     notify_due_date_changes(issues)
+    notify_change_status(issues)
 
     logger.info('Process finished...')
 
