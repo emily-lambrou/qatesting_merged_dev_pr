@@ -67,7 +67,6 @@ def notify_due_date_changes_and_qatesting_status(issues):
         
         current_status = projectItem.get('Status').get('name')
         if not current_status:
-            logger.warning(f'No status found for project item: {project_item}')
             continue
         
         if current_status == 'QA Testing':
