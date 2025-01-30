@@ -71,7 +71,7 @@ def get_project_issues(owner, owner_type, project_number, filters=None, after=No
                 nodes {{
                   id 
                   Status: fieldValueByName(name: "Status") {{
-                    ... on ProjectV2ItemFieldDateValue {{
+                    ... on ProjectV2ItemFieldSingleSelectValue {{
                       id
                       name
                     }}
