@@ -34,5 +34,9 @@ inputs:
     description: "DryRun Mode (True,False)"
     required: false
     default: 'False'
+  status_field_name:
+    description: "The field name for the status"
+    required: true
+    default: 'Status'
 
     
