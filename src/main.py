@@ -243,20 +243,12 @@ def main():
         logger.info('No issues have been found')
         return
 
-    status_issues = graphql.get_status_project_issues(
-            owner=config.repository_owner,
-            owner_type=config.repository_owner_type,
-            project_number=config.project_number,
-            status_field_name=config.status_field_name,
-            filters={'open_only': True}
-    )
-
     # Process the issues to update fields
     update_fields(issues)
 
     # Process to identify change in the due date and write a comment in the issue
     notify_due_date_changes(issues)
-    notify_change_status(status_issues)
+    notify_change_status(issues)
 
     logger.info('Process finished...')
 
