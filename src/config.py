@@ -13,5 +13,3 @@ api_endpoint = os.environ['GITHUB_GRAPHQL_URL']
 
 comments_issue_number = 0 if os.environ.get('INPUT_COMMENTS_ISSUE_NUMBER') == 'False' else int(os.environ.get('INPUT_COMMENTS_ISSUE_NUMBER'))
 comments_issue_repo = False if os.environ.get('INPUT_COMMENTS_ISSUE_REPO') == 'False' else os.environ.get('INPUT_COMMENTS_ISSUE_REPO')
-
-status_field_name = os.environ['INPUT_STATUS_FIELD_NAME']
