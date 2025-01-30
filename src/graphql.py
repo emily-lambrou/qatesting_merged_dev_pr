@@ -69,7 +69,13 @@ def get_project_issues(owner, owner_type, project_number, filters=None, after=No
               number
               items(first: 100,after: $after) {{
                 nodes {{
-                  id
+                  id 
+                  Status: fieldValueByName(name: "Status") {{
+                    ... on ProjectV2ItemFieldDateValue {{
+                      id
+                      name
+                    }}
+                  }}
                   dueDate: fieldValueByName(name: "Due Date") {{
                     ... on ProjectV2ItemFieldDateValue {{
                       id
