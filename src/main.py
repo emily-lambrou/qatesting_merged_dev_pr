@@ -5,54 +5,7 @@ import utils
 import graphql
 
 
-def notify_change_status(status_issues):
-    for issue in status_issues:
-        if issue.get('state') == 'CLOSED':
-            continue
-
-        issue_content = issue.get('content', {})
-        if not issue_content:
-            logger.warning(f'Issue object does not contain "content": {issue}')
-            continue
-
-        issueId = issue_content.get('id')
-      
-        project_items = issue.get('projectItems', {}).get('nodes', [])
-        if not project_items:
-            logger.warning(f'No project items found for issue {issueId}')
-            continue
-
-        project_item = project_items[0]
-        if not project_item.get('fieldValueByName'):
-            logger.warning(f'Project item does not contain "fieldValueByName": {project_item}')
-            continue
-
-        current_status = project_item['fieldValueByName'].get('name')
-        if not current_status:
-            logger.warning(f'No status found in fieldValueByName for project item: {project_item}')
-            continue
-
-        if current_status == 'QA Testing':
-            comment_text_qatesting = "Testing will be available in 15 minutes."
-
-            if not utils.check_comment_exists_for_qatesting(issueId, comment_text_qatesting):
-                comment = utils.prepare_qatesting_issue_comment(
-                    issue=issue_content,
-                    assignees=issue_content.get('assignees', {}).get('nodes', []),
-                )
-
-                if not config.dry_run:
-                    comment_result = graphql.add_issue_comment(issueId, comment)
-                    if comment_result:
-                        logger.info(f'Comment added to issue #{issue_content.get("number")} ({issueId})')
-                    else:
-                        logger.error(f'Failed to add comment to issue #{issue_content.get("number")} ({issueId})')
-            else:
-                logger.info(f'Comment already exists for issue #{issue_content.get("number")} ({issueId})')
-
-
-
-def notify_due_date_changes(issues):
+def notify_due_date_changes_and_qatesting_status(issues):
     for projectItem in issues:
         # Safely extract 'content' from projectItem
         issue = projectItem.get('content')
@@ -62,7 +15,11 @@ def notify_due_date_changes(issues):
 
         # Get the list of assignees
         assignees = issue.get('assignees', {}).get('nodes', [])
-        
+
+        #------------------
+        # DUE DATE CHANGES
+        #------------------
+    
         # Get the due date value
         due_date = None
         due_date_obj = None
@@ -101,7 +58,37 @@ def notify_due_date_changes(issues):
                     logger.error(f"Failed to add comment to issue {issue_title} (ID: {issueId}): {e}")
             else:
                 logger.info(f'DRY RUN: Comment prepared for issue with title {issue_title}. Due date is {due_date_obj}.')
+  
+        #-------------------------
+        # QA TESTING STATUS CHANGE 
+        #-------------------------
 
+        # Get the status value
+        
+        current_status = projectItem.get('Status').get('name')
+        if not current_status:
+            logger.warning(f'No status found for project item: {project_item}')
+            continue
+        
+        if current_status == 'QA Testing':
+            comment_text_qatesting = "Testing will be available in 15 minutes."
+
+            if not utils.check_comment_exists_for_qatesting(issueId, comment_text_qatesting):
+                comment = utils.prepare_qatesting_issue_comment(
+                        issue=issue,
+                        assignees=assignees
+                )
+
+                if not config.dry_run:
+                    try:
+                        # Add the comment to the issue
+                        graphql.add_issue_comment(issueId, comment)
+                        logger.info(f'Comment added to issue with title {issue_title} for QA Testing')
+                    except Exception as e:
+                        logger.error(f"Failed to add comment to issue {issue_title} (ID: {issueId}): {e}")
+                else:
+                    logger.info(f'DRY RUN: Comment prepared for issue with title {issue_title} for QA Testing') 
+            
 
 def fields_based_on_due_date(project, issue, updates):
     # Extract all field nodes from the project
