@@ -176,7 +176,7 @@ def get_project_issues(owner, owner_type, project_number, filters=None, after=No
     return issues
 
 
-def get_project_issues(owner, owner_type, project_number, status_field_name, filters=None, after=None, issues=None):
+def get_status_project_issues(owner, owner_type, project_number, status_field_name, filters=None, after=None, issues=None):
     query = f"""
     query GetProjectIssues($owner: String!, $projectNumber: Int!, $status: String!, $after: String) {{
         {owner_type}(login: $owner) {{
