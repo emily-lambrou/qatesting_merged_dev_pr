@@ -22,9 +22,9 @@ def prepare_qatesting_issue_comment(issue: dict, assignees: dict):
     return comment
 
 
-def check_comment_exists_for_qatesting(issue_id, comment_text_qatesting):
+def check_comment_exists_for_qatesting(issueId, comment_text_qatesting):
     """Check if the comment already exists on the issue."""
-    comments = graphql.get_issue_comments(issue_id)
+    comments = graphql.get_issue_comments(issueId)
     for comment in comments:
         if comment_text_qatesting in comment.get('body', ''):
             return True
