@@ -247,9 +247,8 @@ def main():
     update_fields(issues)
 
     # Process to identify change in the due date and write a comment in the issue
-    notify_due_date_changes(issues)
-    notify_change_status(issues)
-
+    notify_due_date_changes_and_qatesting_status(issues)
+    
     logger.info('Process finished...')
 
 
