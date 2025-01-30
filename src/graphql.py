@@ -69,12 +69,6 @@ def get_project_issues(owner, owner_type, project_number, filters=None, after=No
               items(first: 100,after: $after) {{
                 nodes {{
                   id
-                  status: fieldValueByName(name: "Status") {{
-                    ... on ProjectV2ItemFieldSingleSelectValue {{
-                      id: optionId
-                      name
-                    }} 
-                  }}
                   dueDate: fieldValueByName(name: "Due Date") {{
                     ... on ProjectV2ItemFieldDateValue {{
                       id
@@ -180,6 +174,137 @@ def get_project_issues(owner, owner_type, project_number, filters=None, after=No
         )
 
     return issues
+
+
+def get_project_issues(owner, owner_type, project_number, status_field_name, filters=None, after=None, issues=None):
+    query = f"""
+    query GetProjectIssues($owner: String!, $projectNumber: Int!, $status: String!, $after: String) {{
+        {owner_type}(login: $owner) {{
+            projectV2(number: $projectNumber) {{
+                id
+                title
+                number
+                items(first: 100, after: $after) {{
+                    nodes {{
+                        id
+                        fieldValueByName(name: $status) {{
+                            ... on ProjectV2ItemFieldSingleSelectValue {{
+                                id
+                                name
+                            }}
+                        }}
+                        content {{
+                            ... on Issue {{
+                                id
+                                title
+                                number
+                                state
+                                url
+                                assignees(first: 20) {{
+                                    nodes {{
+                                        name
+                                        email
+                                        login
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+                    pageInfo {{
+                        endCursor
+                        hasNextPage
+                        hasPreviousPage
+                    }}
+                    totalCount
+                }}
+            }}
+        }}
+    }}
+    """
+
+    variables = {
+        'owner': owner,
+        'projectNumber': project_number,
+        'status': status_field_name,
+        'after': after
+    }
+
+    try:
+        response = requests.post(
+            config.api_endpoint,
+            json={"query": query, "variables": variables},
+            headers={"Authorization": f"Bearer {config.gh_token}"}
+        )
+    
+        data = response.json()
+    
+        if 'errors' in data:
+            logging.error(f"GraphQL query errors: {data['errors']}")
+            return []
+          
+        owner_data = data.get('data', {}).get(owner_type, {})
+        project_data = owner_data.get('projectV2', {})
+        items_data = project_data.get('items', {})
+        pageinfo = items_data.get('pageInfo', {})
+        nodes = items_data.get('nodes', [])
+    
+        if issues is None:
+            issues = []
+    
+        if filters:
+            filtered_issues = []
+            for node in nodes:
+                issue_content = node.get('content', {})
+                if not issue_content:
+                    continue
+    
+                issue_id = issue_content.get('id')
+                if not issue_id:
+                    continue
+
+                field_value = node.get('fieldValueByName')
+                current_status = field_value.get('name') if field_value else None
+       
+                if filters.get('open_only') and issue_content.get('state') != 'OPEN':
+                    logging.debug(f"Filtering out issue ID {issue_id} with state {issue_content.get('state')}")
+                    continue
+       
+                if current_status == 'QA Testing':
+                    if not utils.check_comment_exists(issue_id, "Testing will be available in 15 minutes."):
+                        logging.debug(f"Adding issue ID {issue_id} as status is 'QA Testing'")
+                        add_issue_comment(issue_id, "Testing will be available in 15 minutes.")
+                        logging.info(f"Comment added to issue {issue_id}")
+                        filtered_issues.append(node)
+                    else:
+                        logging.info(f"Comment already exists for issue {issue_id}")
+
+            nodes = filtered_issues
+    
+        issues = issues + nodes
+    
+        if pageinfo.get('hasNextPage'):
+            return get_project_issues(
+                owner=owner,
+                owner_type=owner_type,
+                project_number=project_number,
+                after=pageinfo.get('endCursor'),
+                filters=filters,
+                issues=issues,
+                status_field_name=status_field_name
+            )
+    
+        return issues
+    except requests.RequestException as e:
+        logging.error(f"Request error: {e}")
+        return []
+
+
+
+
+
+
+
+
 
 def get_issue(owner_name, repo_name, issue_number):
     # GraphQL query
