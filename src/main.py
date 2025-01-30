@@ -5,8 +5,8 @@ import utils
 import graphql
 
 
-def notify_change_status(issues):
-    for issue in issues:
+def notify_change_status(status_issues):
+    for issue in status_issues:
         if issue.get('state') == 'CLOSED':
             continue
 
