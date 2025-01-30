@@ -1,5 +1,6 @@
 import requests
 import config
+import logging
 from logger import logger
 
 
@@ -248,8 +249,8 @@ def get_status_project_issues(owner, owner_type, project_number, status_field_na
         pageinfo = items_data.get('pageInfo', {})
         nodes = items_data.get('nodes', [])
     
-        if issues is None:
-            issues = []
+        if status_issues is None:
+            status_issues = []
     
         if filters:
             filtered_issues = []
@@ -258,51 +259,32 @@ def get_status_project_issues(owner, owner_type, project_number, status_field_na
                 if not issue_content:
                     continue
     
-                issue_id = issue_content.get('id')
-                if not issue_id:
+                issueId = issue_content.get('id')
+                if not issueId:
                     continue
-
-                field_value = node.get('fieldValueByName')
-                current_status = field_value.get('name') if field_value else None
        
                 if filters.get('open_only') and issue_content.get('state') != 'OPEN':
-                    logging.debug(f"Filtering out issue ID {issue_id} with state {issue_content.get('state')}")
                     continue
        
-                if current_status == 'QA Testing':
-                    if not utils.check_comment_exists(issue_id, "Testing will be available in 15 minutes."):
-                        logging.debug(f"Adding issue ID {issue_id} as status is 'QA Testing'")
-                        add_issue_comment(issue_id, "Testing will be available in 15 minutes.")
-                        logging.info(f"Comment added to issue {issue_id}")
-                        filtered_issues.append(node)
-                    else:
-                        logging.info(f"Comment already exists for issue {issue_id}")
-
             nodes = filtered_issues
     
-        issues = issues + nodes
+        status_issues = status_issues + nodes
     
         if pageinfo.get('hasNextPage'):
-            return get_project_issues(
+            return get_status_project_issues(
                 owner=owner,
                 owner_type=owner_type,
                 project_number=project_number,
                 after=pageinfo.get('endCursor'),
                 filters=filters,
-                issues=issues,
+                status_issues=status_issues,
                 status_field_name=status_field_name
             )
     
-        return issues
+        return status_issues
     except requests.RequestException as e:
         logging.error(f"Request error: {e}")
         return []
-
-
-
-
-
-
 
 
 
