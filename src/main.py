@@ -1,255 +1,146 @@
 from logger import logger
-from datetime import datetime, timedelta
+import logging
+import json
+import requests
 import config
-import utils
 import graphql
 
+def check_comment_exists(issue_id, comment_text):
+    """Check if the comment already exists on the issue."""
+    comments = graphql.get_issue_comments(issue_id)
+    for comment in comments:
+        if comment_text in comment.get('body', ''):
+            return True
+    return False
 
-def notify_due_date_changes_and_qatesting_status(issues):
-    for projectItem in issues:
-        # Safely extract 'content' from projectItem
-        issue = projectItem.get('content')
-        if not issue:
-            logger.error(f"Missing 'content' in project item: {projectItem}")
-            continue
-
-        # Get the list of assignees
-        assignees = issue.get('assignees', {}).get('nodes', [])
-
-        #------------------
-        # DUE DATE CHANGES
-        #------------------
-    
-        # Get the due date value
-        due_date = None
-        due_date_obj = None
-        try:
-            due_date = projectItem.get('dueDate').get('date')
-            if due_date:
-                due_date_obj = datetime.strptime(due_date, "%Y-%m-%d").date()
-        except (AttributeError, ValueError) as e:
-            continue  # Skip this issue and move to the next
-
-        issue_title = issue.get('title', 'Unknown Title')
-        issueId = issue.get('id', 'Unknown ID')
-
-        if not due_date_obj:
-            logger.info(f'No due date found for issue {issue_title}')
-            continue
-        
-        expected_comment = f"The Due Date is updated to: {due_date_obj.strftime('%b %d, %Y')}."
-      
-        # Check if the comment already exists
-        if not utils.check_comment_exists(issueId, expected_comment):
-            # Prepare the notification content
-                
-            comment = utils.prepare_duedate_comment(
-                issue=issue,
-                assignees=assignees, 
-                due_date=due_date_obj
-            )
-                
-            if not config.dry_run:
-                try:
-                    # Add the comment to the issue
-                    graphql.add_issue_comment(issueId, comment)
-                    logger.info(f'Comment added to issue with title {issue_title}. Due date is {due_date_obj}.')
-                except Exception as e:
-                    logger.error(f"Failed to add comment to issue {issue_title} (ID: {issueId}): {e}")
-            else:
-                logger.info(f'DRY RUN: Comment prepared for issue with title {issue_title}. Due date is {due_date_obj}.')
-  
-        #-------------------------
-        # QA TESTING STATUS CHANGE 
-        #-------------------------
-
-        # Get the status value
-        
-        current_status = projectItem.get('Status').get('name')
-        if not current_status:
-            continue
-        
-        if current_status == 'QA Testing':
-            comment_text_qatesting = "Testing will be available in 15 minutes."
-
-            if not utils.check_comment_exists_for_qatesting(issueId, comment_text_qatesting):
-                comment = utils.prepare_qatesting_issue_comment(
-                        issue=issue,
-                        assignees=assignees
-                )
-
-                if not config.dry_run:
-                    try:
-                        # Add the comment to the issue
-                        graphql.add_issue_comment(issueId, comment)
-                        logger.info(f'Comment added to issue with title {issue_title} for QA Testing')
-                    except Exception as e:
-                        logger.error(f"Failed to add comment to issue {issue_title} (ID: {issueId}): {e}")
-                else:
-                    logger.info(f'DRY RUN: Comment prepared for issue with title {issue_title} for QA Testing') 
-            
-
-def fields_based_on_due_date(project, issue, updates):
-    # Extract all field nodes from the project
-    field_nodes = project["fields"]["nodes"]
-
-    # Identify the 'Release' and 'Week' fields by name
-    release_field = next((field for field in field_nodes if field and field["name"] == "Release"), None)
-    week_field = next((field for field in field_nodes if field and field["name"] == "Week"), None)
-
-    # Get the options for 'Release' and 'Week' fields
-    release_options = release_field['options']
-    week_options = week_field['configuration']['iterations'] + week_field['configuration']['completedIterations']
-
-    comment_fields = []
-
-    # Skip processing if the issue does not have a due date
-    if not issue.get('dueDate'):
-        return comment_fields
-
-    # Retrieve the due date from the issue
-    due_date = issue.get('dueDate').get('date')
-    output = due_date
-
-    # Handle missing 'week' field by finding the appropriate week based on the due date
-    week = utils.find_week(weeks=week_options, date_str=due_date)
-    if week and week != issue.get('week'):
-        # Add the 'week' field update to the updates list
-        updates.append({
-            "field_id": week_field['id'],
-            "type": "iteration",
-            "value": week['id']
-        })
-        output += f' -> Week {week}'
-        comment_fields.append({'field': 'Week', 'value': week['title']})
-
-    # Handle missing 'release' field by finding the appropriate release based on the due date
-    release = utils.find_release(releases=release_options, date_str=due_date)
-    if release and release != issue.get('release'):
-        # Add the 'release' field update to the updates list
-        updates.append({
-            "field_id": release_field['id'],
-            "type": "single_select",
-            "value": release['id']
-        })
-        output += f' -> Release {release}'
-        comment_fields.append({'field': 'Release', 'value': release['name']})
-
-    # Log the updates for debugging or tracking purposes
-    logger.debug(output)
-
-    return comment_fields
-
-
-def fields_based_on_estimation(project, issue, updates):
-    # Extract all field nodes from the project
-    field_nodes = project["fields"]["nodes"]
-
-    # Identify the 'Size' field by name
-    size_field = next((field for field in field_nodes if field and field["name"] == "Size"), None)
-    size_options = size_field['options']
-
-    comment_fields = []
-
-    # Skip processing if the issue does not have an estimate
-    if not issue.get('estimate'):
-        return comment_fields
-
-    # Retrieve the estimate value from the issue
-    estimate = issue.get('estimate').get('name')
-    output = estimate
-
-    # Find the size corresponding to the estimate and update if found
-    size = utils.find_size(sizes=size_options, estimate_name=estimate)
-    if size and size != issue.get('size'):
-        # Add the 'size' field update to the updates list
-        updates.append({
-            "field_id": size_field['id'],
-            "type": "single_select",
-            "value": size['id']
-        })
-        # Log the update for debugging or tracking purposes
-        logger.debug(f'{output} -> Size {size}')
-        comment_fields.append({'field': 'Size', 'value': size['name']})
-
-    return comment_fields
-
-
-def update_fields(issues):
-    # Fetch the project details from GraphQL
-    project = graphql.get_project(
-        organization_name=config.repository_owner,
-        project_number=config.project_number
-    )
-
-    comments_issue = None
-    if config.comments_issue_repo:
-        comments_issue = graphql.get_issue(
-            owner_name=config.repository_owner,
-            repo_name=config.comments_issue_repo,
-            issue_number=config.comments_issue_number
+def notify_change_status():
+    # Fetch issues based on whether it's an enterprise or not
+    if config.is_enterprise:
+        issues = graphql.get_project_issues(
+            owner=config.repository_owner,
+            owner_type=config.repository_owner_type,
+            project_number=config.project_number,
+            status_field_name=config.status_field_name,
+            filters={'open_only': True}
         )
-    
+    else:
+        issues = graphql.get_repo_issues(
+            owner=config.repository_owner,
+            repository=config.repository_name
+        )
 
-    # Iterate over all issues to check and set missing fields
-    for issue in issues:
-        updates = []
-        # Determine missing fields based on estimation and due date
-        comment_fields = fields_based_on_estimation(project, issue, updates)
-        comment_fields += fields_based_on_due_date(project, issue, updates)
-
-        # Apply updates if not in dry run mode
-        if updates:
-            # Constructing the comment
-            comment = "The following fields have been updated:\n" + "\n".join(
-                [f"- {item['field']}: **{item['value']}**" for item in comment_fields]
-            )
-
-            if not config.dry_run:
-                graphql.update_project_item_fields(
-                    project_id=project['id'],
-                    item_id=issue['id'],
-                    updates=updates
-                )
-
-                # Add a comment summarizing the updated fields
-                if comments_issue:
-                    comment = f"Issue {issue['content']['url']}: {comment}"
-                    graphql.add_issue_comment(comments_issue['id'], comment)
-                else:
-                    graphql.add_issue_comment(issue['content']['id'], comment)
-
-            # Log the output
-            logger.info(f"Comment has been added to: {issue['content']['url']} with comment {comment}")
-
-
-def main():
-    # Log the start of the process
-    logger.info('Process started...')
-    if config.dry_run:
-        logger.info('DRY RUN MODE ON!')
-
-    # Fetch all open issues from the project
-    issues = graphql.get_project_issues(
-        owner=config.repository_owner,
-        owner_type=config.repository_owner_type,
-        project_number=config.project_number,
-        filters={'open_only': True}
-    )
-
-    # Exit if no issues are found
     if not issues:
         logger.info('No issues have been found')
         return
 
-    # Process the issues to update fields
-    update_fields(issues)
+    #----------------------------------------------------------------------------------------
+    # Get the project_id, status_field_id and status_option_id 
+    #----------------------------------------------------------------------------------------
 
-    # Process to identify change in the due date and write a comment in the issue
-    notify_due_date_changes_and_qatesting_status(issues)
+    project_title = config.project_title
     
-    logger.info('Process finished...')
+    project_id = graphql.get_project_id_by_title(
+        owner=config.repository_owner, 
+        project_title=project_title
+    )
 
+    if not project_id:
+        logging.error(f"Project {project_title} not found.")
+        return None
+    
+    status_field_id = graphql.get_status_field_id(
+        project_id=project_id,
+        status_field_name=config.status_field_name
+    )
+
+    if not status_field_id:
+        logging.error(f"Status field not found in project {project_title}")
+        return None
+
+    status_option_id = graphql.get_qatesting_status_option_id(
+        project_id=project_id,
+        status_field_name=config.status_field_name
+    )
+
+    if not status_option_id:
+        logging.error(f"'QA Testing' option not found in project {project_title}")
+        return None
+
+    #----------------------------------------------------------------------------------------
+
+    items = graphql.get_project_items(
+        owner=config.repository_owner, 
+        owner_type=config.repository_owner_type,
+        project_number=config.project_number,
+        status_field_name=config.status_field_name
+    )
+
+    for issue in issues:
+        # Skip the issues if they are closed
+        if issue.get('state') == 'CLOSED':
+            continue
+
+        issue_content = issue.get('content', {})
+        if not issue_content:
+            continue
+
+        issue_id = issue_content.get('id')
+        if not issue_id:
+            continue
+
+        # Get current status
+        field_value = issue.get('fieldValueByName')
+        current_status = field_value.get('name') if field_value else None
+
+        comment_text = "Testing will be available in 15 minutes."
+
+        if current_status == 'QA Testing':
+            continue  # skip if already QA Testing
+
+        if check_comment_exists(issue_id, comment_text):
+            continue  # skip if comment already exists (previously QA)
+
+        issue_title = issue.get('title')
+
+        # ✅ Check if the issue has a merged PR into dev
+        has_merged_pr_in_dev = graphql.get_issue_has_merged_pr(issue_id)
+        if has_merged_pr_in_dev:  
+            print("Issue object: ", json.dumps(issue, indent=4))
+            logger.info(f'Proceeding to update the status to QA Testing as it contains a merged PR into dev.')
+
+            # Find the project item for this issue
+            item_found = False
+            for item in items:
+                if item.get('content') and item['content'].get('id') == issue_id:
+                    item_id = item['id']
+                    item_found = True
+                    
+                    # Update the status field
+                    update_result = graphql.update_issue_status_to_qa_testing(
+                        owner=config.repository_owner,
+                        project_title=project_title,
+                        project_id=project_id,
+                        status_field_id=status_field_id,
+                        item_id=item_id,
+                        status_option_id=status_option_id
+                    )
+    
+                    if update_result:
+                        logger.info(f'Successfully updated issue {issue_id} to QA Testing.')
+                    else:
+                        logger.error(f'Failed to update issue {issue_id}.')
+                    break  
+
+            if not item_found:
+                logger.warning(f'No matching item found for issue ID: {issue_id}.')
+                continue  
+
+def main():
+    logger.info('Process started...')
+    if config.dry_run:
+        logger.info('DRY RUN MODE ON!')
+
+    notify_change_status()
 
 if __name__ == "__main__":
     main()
