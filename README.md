@@ -8,29 +8,29 @@ Automatically updating the central GitHub Project status to "QA Testing" when a 
 
 Ensuring that duplicate updates and comments are avoided for cleaner workflows.
 
-**Key Features**
+Adding a comment the same time as changing the status.
 
-- **Branch-Specific Updates**
+# How It Works
 
-- Status changes only occur when the target branch is dev.
+- Detects merged pull requests into the dev branch.
 
-- Merges into master are intentionally excluded from status changes.
+- Identifies linked issues in the project.
 
-**Comment Validation**
+If an issue is not in QA Testing, the workflow:
 
-- If the issue already contains the comment "Testing will be available in 15 minutes", the workflow will skip adding it again.
+- Updates its status → QA Testing.
 
-- This prevents duplicate comments when multiple PRs are merged into dev.
+- Adds a comment: Testing will be available in 15 minutes (triggered by [PR #123](https://github.com/org/repo/pull/123))
 
-**Status Update Control**
+If the issue is already in QA Testing, the workflow:
 
-- Once a PR has triggered the status update and added the QA Testing comment, subsequent PRs to master will not reset the status to QA Testing again.
+- Leaves the status unchanged.
 
-**Dependency**
+- Adds a new comment for each new PR merged into dev.
 
-This workflow depends on the following repository:
-👉 emily-lambrou/status_changes_to_qatesting
+- If a PR is merged into non-dev branches (e.g. master), no status change or comment is made.
 
+- Open PRs (not merged) are ignored.
 
 ### Prerequisites
 
@@ -86,7 +86,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Check for merged PRs and change the status
-        uses: emily-lambrou/merged_pr_qatesting@v1.1
+        uses: emily-lambrou/qatesting_merged_dev_pr@v1.0
         with:
           dry_run: ${{ vars.DRY_RUN }}           
           gh_token: ${{ secrets.GH_TOKEN }}      
