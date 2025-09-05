@@ -33,16 +33,10 @@ def notify_change_status():
         logger.info("No issues have been found")
         return
 
-    # ----------------------------------------------------------------------------------------
-    # Get the project_id, status_field_id and status_option_id
-    # ----------------------------------------------------------------------------------------
-
     project_title = config.project_title
-
     project_id = graphql.get_project_id_by_title(
         owner=config.repository_owner, project_title=project_title
     )
-
     if not project_id:
         logging.error(f"Project {project_title} not found.")
         return None
@@ -50,7 +44,6 @@ def notify_change_status():
     status_field_id = graphql.get_status_field_id(
         project_id=project_id, status_field_name=config.status_field_name
     )
-
     if not status_field_id:
         logging.error(f"Status field not found in project {project_title}")
         return None
@@ -58,12 +51,9 @@ def notify_change_status():
     status_option_id = graphql.get_qatesting_status_option_id(
         project_id=project_id, status_field_name=config.status_field_name
     )
-
     if not status_option_id:
         logging.error(f"'QA Testing' option not found in project {project_title}")
         return None
-
-    # ----------------------------------------------------------------------------------------
 
     items = graphql.get_project_items(
         owner=config.repository_owner,
@@ -73,7 +63,6 @@ def notify_change_status():
     )
 
     for issue in issues:
-        # Skip closed issues
         if issue.get("state") == "CLOSED":
             continue
 
@@ -85,14 +74,12 @@ def notify_change_status():
         if not issue_id:
             continue
 
-        # Get current status
         field_value = issue.get("fieldValueByName")
         current_status = field_value.get("name") if field_value else None
 
-        # ✅ Check latest merged PR into dev
         latest_pr = graphql.get_latest_merged_pr_into_dev(issue_id)
         if not latest_pr:
-            continue  # no merged PR into dev found
+            continue
 
         pr_number = latest_pr["number"]
         pr_url = latest_pr["url"]
@@ -102,49 +89,49 @@ def notify_change_status():
             f"(triggered by [PR #{pr_number}]({pr_url}))"
         )
 
-        # Skip if already QA Testing
-        if current_status == "QA Testing":
-            continue
-
-        # Skip if we've already posted this comment (means PR already processed)
+        # Skip if comment for this PR already exists
         if check_comment_exists(issue_id, comment_text):
             continue
 
-        issue_title = issue.get("title")
-        logger.info(
-            f"Proceeding to update issue {issue_id} to QA Testing (triggered by PR #{pr_number})"
-        )
+        if current_status != "QA Testing":
+            # Update status to QA Testing
+            logger.info(
+                f"Updating issue {issue_id} to QA Testing (triggered by PR #{pr_number})"
+            )
 
-        # Find the project item for this issue
-        item_found = False
-        for item in items:
-            if item.get("content") and item["content"].get("id") == issue_id:
-                item_id = item["id"]
-                item_found = True
+            item_found = False
+            for item in items:
+                if item.get("content") and item["content"].get("id") == issue_id:
+                    item_id = item["id"]
+                    item_found = True
 
-                # Update the status field
-                update_result = graphql.update_issue_status_to_qa_testing(
-                    owner=config.repository_owner,
-                    project_title=project_title,
-                    project_id=project_id,
-                    status_field_id=status_field_id,
-                    item_id=item_id,
-                    status_option_id=status_option_id,
-                )
-
-                if update_result:
-                    logger.info(
-                        f"Successfully updated issue {issue_id} to QA Testing (PR #{pr_number})."
+                    update_result = graphql.update_issue_status_to_qa_testing(
+                        owner=config.repository_owner,
+                        project_title=project_title,
+                        project_id=project_id,
+                        status_field_id=status_field_id,
+                        item_id=item_id,
+                        status_option_id=status_option_id,
                     )
-                    # ✅ Add the comment as both human message + marker
-                    graphql.add_issue_comment(issue_id, comment_text)
-                else:
-                    logger.error(f"Failed to update issue {issue_id}.")
-                break
 
-        if not item_found:
-            logger.warning(f"No matching item found for issue ID: {issue_id}.")
-            continue
+                    if update_result:
+                        logger.info(
+                            f"Successfully updated issue {issue_id} to QA Testing."
+                        )
+                        graphql.add_issue_comment(issue_id, comment_text)
+                    else:
+                        logger.error(f"Failed to update issue {issue_id}.")
+                    break
+
+            if not item_found:
+                logger.warning(f"No matching item found for issue ID: {issue_id}.")
+                continue
+        else:
+            # Already QA → just drop a new comment for the new PR
+            logger.info(
+                f"Issue {issue_id} already QA Testing → adding new comment for PR #{pr_number}"
+            )
+            graphql.add_issue_comment(issue_id, comment_text)
 
 
 def main():
