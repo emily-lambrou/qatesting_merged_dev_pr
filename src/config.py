@@ -14,6 +14,4 @@ project_title = os.environ['INPUT_PROJECT_TITLE']
 api_endpoint = os.environ.get('GITHUB_GRAPHQL_URL', 'https://github.intranet.unicaf.org/api/graphql')
 status_field_name = os.environ['INPUT_STATUS_FIELD_NAME']
 
-# ───────────────────────────────────────────────────────────────────────────────
-# NEW: extract the branch name from GITHUB_REF (e.g. "refs/heads/dev" → "dev")
 repository_branch = os.environ.get('GITHUB_REF', '').rsplit('/', 1)[-1]
