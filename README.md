@@ -1,4 +1,4 @@
-# Status changes to "QA Testing" if a pull request is merged in the dev branch 
+# Issue Project Status changes to "QA Testing" if a pull request is merged in the dev branch 
 
 **Overview**
 
